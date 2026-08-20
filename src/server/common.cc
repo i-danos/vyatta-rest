@@ -361,7 +361,7 @@ Rest::read_conf_modify_file(const string &id, string &user, string &description)
 	}
 
 	char buf[Rest::CHUNKER_READ_SIZE];
-	if (fgets(buf,Rest::CHUNKER_READ_SIZE,fp) > 0) {
+	if (fgets(buf,Rest::CHUNKER_READ_SIZE,fp) != NULL) {
 		string str(buf);
 		size_t pos = str.find("/");
 		if (pos == string::npos) {
