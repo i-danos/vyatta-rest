@@ -22,7 +22,10 @@ PATH=/sbin:/bin:/usr/sbin:/usr/bin
 NAME=chunker2
 DAEMON=/usr/sbin/chunker2
 RESTDAEMON=/opt/vyatta/bin/rest
-FCGISOCK=/tmp/fcgi.socket
+# Not /tmp: lighttpd.service runs with PrivateTmp=yes, so systemd gives it
+# a private /tmp and it cannot see a socket this service creates in the
+# real one. /run is shared.
+FCGISOCK=/run/vyatta-rest/fcgi.socket
 PIDFILE=/var/run/chunker2.pid
 RESTPIDFILE=/var/run/rest.pid
 
@@ -36,6 +39,8 @@ case $1 in
 	start)
 		mkdir -p /var/run/gui
 		chmod a+rwx /var/run/gui
+
+		mkdir -p "$(dirname $FCGISOCK)"
 
 		echo "Starting API PAGER server"
   		start-stop-daemon --start --quiet --oknodo --background -m --pidfile $PIDFILE --startas $DAEMON -- -p $PIDFILE 

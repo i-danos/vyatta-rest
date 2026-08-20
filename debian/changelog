@@ -23,6 +23,21 @@ vyatta-rest (1.9) unstable; urgency=medium
     which is what lighttpd's deprecation notice points at. The cipher
     selection itself is unchanged.
 
+  * Move the REST FastCGI socket from /tmp to /run/vyatta-rest.
+    Debian's lighttpd.service sets PrivateTmp=yes, so systemd hands lighttpd
+    its own /tmp namespace. The socket is created by the chunker service,
+    a sysvinit script with no such isolation, so it landed in the real /tmp
+    where lighttpd could not see it:
+
+      establishing connection failed: socket: unix:/tmp/fcgi.socket:
+        No such file or directory
+      all handlers for /rest/op? on are down.
+
+    Every REST call answered 503 while both processes looked healthy --
+    lighttpd listening on 443, the REST daemon running, and the socket
+    present in /tmp for anyone who went looking. /run is shared between the
+    two, so both ends now agree on where the socket is.
+
  -- DANOS Package Maintainers <DANOS@att.com>  Thu, 20 Aug 2026 04:00:00 +0000
 
 vyatta-rest (1.8) unstable; urgency=medium

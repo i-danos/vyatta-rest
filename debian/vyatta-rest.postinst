@@ -116,7 +116,7 @@ server.modules   += ( "mod_fastcgi" )
 $HTTP["url"] =~ "/rest/" {
 fastcgi.server    = ( "" => 
 ((
-    "socket" => "/tmp/fcgi.socket",
+    "socket" => "/run/vyatta-rest/fcgi.socket",
     "max-procs" => 2,
     "idle-timeout" => 20,
     "bin-environment" => ( 
