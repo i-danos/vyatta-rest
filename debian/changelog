@@ -1,3 +1,30 @@
+vyatta-rest (1.9) unstable; urgency=medium
+
+  * Depend on lighttpd-mod-openssl and load the module explicitly.
+    lighttpd had OpenSSL support built in until 1.4.56; it is a module now,
+    and Debian ships it as a separate package. The generated 10-ssl.conf is
+    full of ssl.* directives but never pulled the module in, so on trixie
+    lighttpd failed its own config check:
+
+      dlopen() failed for: /usr/lib/lighttpd/mod_openssl.so
+      loading plugins finally failed
+
+    ExecStartPre runs that check, so lighttpd.service never started and
+    "set service https" left the REST API with nothing listening on 443.
+    Current lighttpd still auto-loads the module when it sees ssl.* keys but
+    warns that it will stop doing so, hence the explicit server.modules line
+    rather than relying on the fallback.
+
+  * Drop ssl.use-sslv2 and ssl.use-sslv3 from the generated configuration.
+    Both keys were removed; lighttpd refuses SSLv2 and SSLv3 unconditionally
+    and now reports the keys as unknown.
+
+  * Replace ssl.cipher-list with ssl.openssl.ssl-conf-cmd "CipherString",
+    which is what lighttpd's deprecation notice points at. The cipher
+    selection itself is unchanged.
+
+ -- DANOS Package Maintainers <DANOS@att.com>  Thu, 20 Aug 2026 04:00:00 +0000
+
 vyatta-rest (1.8) unstable; urgency=medium
 
   * Remove potentially offensive language
