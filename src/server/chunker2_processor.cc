@@ -147,10 +147,14 @@ ChunkerProcessor::writer(string token, const string &cmd,int (&cp)[2], string us
 	vector <string> opcmdarr;
 	tokenizeOpCmd(opmodecmd, opcmdarr);
 
-	char **cmdarr = new char*[4];
-	cmdarr[0] = (char *)(string("/opt/vyatta/bin/opc").c_str());
-	cmdarr[1] = (char *)(string("-op").c_str());
-	cmdarr[2] = (char *)(string("run-from-env").c_str());
+	// String literals, not temporary std::strings: each string(...) below
+	// used to be destroyed at the end of its own statement, leaving c_str()
+	// dangling before execve ever saw it. Literals have static storage, so
+	// the pointers stay valid.
+	char *cmdarr[4];
+	cmdarr[0] = (char *)"/opt/vyatta/bin/opc";
+	cmdarr[1] = (char *)"-op";
+	cmdarr[2] = (char *)"run-from-env";
 	cmdarr[3] = NULL;
 
 	// Create json args to pass in via environment
@@ -171,7 +175,6 @@ ChunkerProcessor::writer(string token, const string &cmd,int (&cp)[2], string us
 	};
 	int err = execve("/opt/vyatta/bin/opc", cmdarr, envarr);
 	close(cp[1]);
-	delete[] cmdarr;
 	if (err == -1) {
 		syslog(LOG_ERR, "ERROR RECEIVED FROM EXECVP(1): %d, %d",err, errno);
 	}

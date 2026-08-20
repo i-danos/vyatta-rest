@@ -23,6 +23,27 @@ vyatta-rest (1.9) unstable; urgency=medium
     which is what lighttpd's deprecation notice points at. The cipher
     selection itself is unchanged.
 
+  * Stop handing execve a dangling argv in the operational-mode path.
+    chunker2 built the argument vector for /opt/vyatta/bin/opc out of
+    temporary std::strings:
+
+        cmdarr[0] = (char *)(string("/opt/vyatta/bin/opc").c_str());
+        cmdarr[1] = (char *)(string("-op").c_str());
+        cmdarr[2] = (char *)(string("run-from-env").c_str());
+
+    Each temporary dies at the end of its own statement, so every pointer
+    was dangling before execve saw it. The path argument is passed
+    separately and is a literal, so exec still succeeded -- with garbage in
+    argv. opc never saw "-op run-from-env", so it did not read OPC_ARGS and
+    treated the garbage as a command, answering
+
+        Invalid command: [$]
+
+    for every operational REST call, while configuration calls -- which do
+    not go through this path -- worked fine. The literals now go straight
+    into the array, where they have static storage. Undefined behaviour
+    that happened to work on the old toolchain; it does not on trixie.
+
   * Move the REST FastCGI socket from /tmp to /run/vyatta-rest.
     Debian's lighttpd.service sets PrivateTmp=yes, so systemd hands lighttpd
     its own /tmp namespace. The socket is created by the chunker service,
