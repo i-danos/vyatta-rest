@@ -128,9 +128,6 @@ AuthBasic::authorized(const string &val, Session &session)
 	int len = 1024;
 	base64Decode((unsigned char*)auth.c_str(),auth.size(),(unsigned char*)&out,len);
 
-	//debug
-	dsyslog(_debug, "%s: auth2: -%s, %d-", __func__, out, len);
-
 	string str_out = string((char*)out);
 	size_t pos = str_out.find(":");
 	if (pos == string::npos) {
@@ -151,8 +148,8 @@ AuthBasic::authorized(const string &val, Session &session)
 		session._access_level = Session::k_VYATTASERVICE_USER;
 	}
 
-	//debug
-	dsyslog(_debug, "%s: auth2a: %s, %s", __func__, username.c_str(), password.c_str());
+	//debug (never log the password or the decoded credentials)
+	dsyslog(_debug, "%s: auth2a: user %s", __func__, username.c_str());
 
 	//now have user and pw--need to  figure out what to do with this...
 
@@ -222,8 +219,8 @@ AuthBasic::authorized(const string &val, Session &session)
 
 	result = pam_authenticate(pam, 0);
 	if (result != PAM_SUCCESS) {
-		dsyslog(_debug, "%s: failed on pam_authenticate for: %s, %s, %d", __func__,
-			username.c_str(), password.c_str(), result);
+		dsyslog(_debug, "%s: failed on pam_authenticate for: %s, %d", __func__,
+			username.c_str(), result);
 		session.vyatta_debug("AAH");
 		free(passwd);
 		return false;
