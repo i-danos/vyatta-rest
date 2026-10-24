@@ -229,8 +229,8 @@ AuthSession::authorized(const string &val, Session &session)
 				session._response.append(Rest::HTTP_RESP_DEBUG,"AABs5");
 			}
 
-			dsyslog(_debug, "%s: authsession(1): %s to %s to %s", __func__,
-				buf, s.get(0).c_str(), auth.c_str());
+			//debug (never log the session record or the presented session key)
+			dsyslog(_debug, "%s: authsession(1): checking session record", __func__);
 
 			unsigned long session_time = strtoul(s.get(2).c_str(),NULL,10);
 
@@ -246,7 +246,7 @@ AuthSession::authorized(const string &val, Session &session)
 					session._response.append(Rest::HTTP_RESP_DEBUG,"AABs7");
 				}
 
-				dsyslog(_debug, "%s: authsession(3): %s to %s", __func__, buf, s.get(0).c_str());
+				dsyslog(_debug, "%s: authsession(3): record is within the timeout", __func__);
 				if (s.get(0) == auth) {
 					//this is our session
 					if (_debug) {

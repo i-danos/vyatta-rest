@@ -16,6 +16,8 @@
 #include <libaudit.h>
 #include "http.hh"
 #include "authbasic.hh"
+#include "authsession.hh"
+#include "authenticate.hh"
 
 // ---- captured log -------------------------------------------------------
 static std::string g_log;
@@ -39,7 +41,14 @@ std::string HTTP::get(Rest::KEY k) { auto &m = g_http[this]; auto i = m.find((in
 void HTTP::set(Rest::KEY k, const std::string &v) { g_http[this][(int)k] = v; }
 void HTTP::set(Rest::KEY k, const char *v) { set(k, std::string(v)); }
 void HTTP::append(Rest::KEY, const std::string &) {}
-void Session::vyatta_debug(const std::string &) {}
+// what Session::vyatta_debug() puts into the response "vyatta-debug" header; main.cc logs the
+// whole serialized response (AUTHFAILED) and sends it to the client, so it counts as log output
+static std::string g_dbg;
+void Session::vyatta_debug(const std::string &d) { if (_debug) { g_dbg += d; g_dbg += '\n'; } }
+// AuthSession is not under test here (the Authenticate collection only needs it to link)
+AuthSession::AuthSession(bool d) : AuthBase(d) {}
+bool AuthSession::handle(const std::string &) { return false; }
+bool AuthSession::authorized(const std::string &, Session &) { return false; }
 
 static bool g_pam_ok = true;
 static std::string g_pam_password;       // what PAM was actually handed
@@ -83,14 +92,15 @@ static int failures = 0;
 // log must not contain secret in any of: raw, base64 of "user:secret", base64 of secret
 static void check_no_secret(const std::string &user, const std::string &secret, const char *what) {
 	std::string a = b64(user + ":" + secret), b = b64(secret);
-	CHECK(g_log.find(secret) == std::string::npos, (std::string(what) + ": raw password not logged").c_str());
-	CHECK(g_log.find(a) == std::string::npos, (std::string(what) + ": base64 user:password not logged").c_str());
-	CHECK(g_log.find(b) == std::string::npos, (std::string(what) + ": base64 password not logged").c_str());
-	CHECK(g_log.find(user + ":" + secret) == std::string::npos, (std::string(what) + ": decoded credentials not logged").c_str());
+	std::string all = g_log + g_dbg;   // log text plus the vyatta-debug header text
+	CHECK(all.find(secret) == std::string::npos, (std::string(what) + ": raw password not logged").c_str());
+	CHECK(all.find(a) == std::string::npos, (std::string(what) + ": base64 user:password not logged").c_str());
+	CHECK(all.find(b) == std::string::npos, (std::string(what) + ": base64 password not logged").c_str());
+	CHECK(all.find(user + ":" + secret) == std::string::npos, (std::string(what) + ": decoded credentials not logged").c_str());
 }
 
 static bool run(bool debug, bool pam_ok, bool service, const std::string &user, const std::string &pw) {
-	g_http.clear(); g_log.clear(); g_pam_ok = pam_ok; g_pam_password.clear();
+	g_http.clear(); g_log.clear(); g_dbg.clear(); g_pam_ok = pam_ok; g_pam_password.clear();
 	AuthBasic ab(debug);
 	Session s(debug);
 	if (service) s._request.set(Rest::HTTP_REQ_URI, "/rest/service/x");
@@ -121,6 +131,32 @@ int main() {
 
 	bool nodbg = run(false, true, false, "alice", secret);
 	CHECK(nodbg && g_log.empty(), "debug off: succeeds and logs nothing");
+
+	// Full path: Authenticate::validate() with the real Authorization header, as lighttpd passes it.
+	// The pre-fix code put "AAAA:<header>" (base64 of user:password) into the debug text.
+	{
+		g_http.clear(); g_log.clear(); g_dbg.clear(); g_pam_ok = false;
+		Authenticate au(true);
+		Session s(true);
+		const std::string hdr = "Basic " + b64("alice:" + secret);
+		s._request.set(Rest::HTTP_REQ_AUTHORIZATION, hdr);
+		bool r = au.validate(s);
+		CHECK(!r, "validate(), debug on, wrong password: fails");
+		CHECK(g_dbg.find("AAAA") != std::string::npos, "validate(): debug header text is produced (control)");
+		CHECK(g_dbg.find(hdr) == std::string::npos, "validate(): Authorization header value not in debug text");
+		CHECK(g_dbg.find(b64("alice:" + secret)) == std::string::npos, "validate(): base64 user:password not in debug text");
+		check_no_secret("alice", secret, "validate() failure");
+		CHECK(g_log.find("alice") != std::string::npos, "validate(): username is still logged (auth2a)");
+	}
+	{
+		g_http.clear(); g_log.clear(); g_dbg.clear();
+		Authenticate au(true);
+		Session s(true);
+		const std::string cookie = "Vyatta-Session 0123456789abcdef";
+		s._request.set(Rest::HTTP_REQ_COOKIE, cookie);
+		au.validate(s);
+		CHECK(g_dbg.find("0123456789abcdef") == std::string::npos, "validate(): session cookie key not in debug text");
+	}
 
 	printf(failures ? "%d failed\n" : "all passed\n", failures);
 	return failures != 0;
